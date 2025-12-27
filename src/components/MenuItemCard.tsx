@@ -1,10 +1,22 @@
-import { Star, Flame, Leaf } from "lucide-react";
+import { Star, Flame, Leaf, MapPin } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { MenuItem } from "@/data/diningData";
 
 interface MenuItemCardProps {
-  item: MenuItem;
+  item: {
+    id: string;
+    name: string;
+    description: string;
+    diningHall: string;
+    mealType: "breakfast" | "lunch" | "dinner";
+    category: string;
+    calories?: number | null;
+    protein?: number | null;
+    carbs?: number | null;
+    fat?: number | null;
+    tags: string[];
+    rating: number;
+  };
   onClick?: () => void;
 }
 
@@ -18,62 +30,69 @@ const tagVariantMap: Record<string, "vegetarian" | "vegan" | "glutenFree" | "hal
   healthy: "maroon",
 };
 
+const hallNames: Record<string, string> = {
+  worcester: "Worcester",
+  franklin: "Franklin",
+  berkshire: "Berkshire",
+  hampshire: "Hampshire",
+};
+
 export function MenuItemCard({ item, onClick }: MenuItemCardProps) {
   return (
     <Card
       variant="interactive"
       onClick={onClick}
-      className="p-5 group"
+      className="p-4"
     >
-      <div className="flex justify-between items-start gap-4">
-        <div className="flex-1 min-w-0">
-          {/* Title & Rating */}
-          <div className="flex items-start justify-between gap-2 mb-2">
-            <h4 className="font-bold text-foreground group-hover:text-primary transition-colors">
-              {item.name}
-            </h4>
-            <div className="flex items-center gap-1 shrink-0">
-              <Star className="w-4 h-4 text-gold" fill="currentColor" />
-              <span className="text-sm font-medium">{item.rating}</span>
-            </div>
-          </div>
-
-          {/* Description */}
-          <p className="text-sm text-muted-foreground mb-3 line-clamp-2">
-            {item.description}
-          </p>
-
-          {/* Tags */}
-          <div className="flex flex-wrap gap-1.5 mb-3">
-            {item.tags.map((tag) => (
-              <Badge
-                key={tag}
-                variant={tagVariantMap[tag] || "secondary"}
-                className="text-xs"
-              >
-                {tag === "vegetarian" && <Leaf className="w-3 h-3 mr-1" />}
-                {tag === "vegan" && <Leaf className="w-3 h-3 mr-1" />}
-                {tag === "high-protein" && <Flame className="w-3 h-3 mr-1" />}
-                {tag.charAt(0).toUpperCase() + tag.slice(1).replace("-", " ")}
-              </Badge>
-            ))}
-          </div>
-
-          {/* Nutrition Quick View */}
-          {item.calories && (
-            <div className="flex items-center gap-4 text-xs text-muted-foreground">
-              <span className="font-medium">{item.calories} cal</span>
-              {item.protein && <span>{item.protein}g protein</span>}
-              {item.carbs && <span>{item.carbs}g carbs</span>}
-            </div>
-          )}
+      <div className="flex justify-between items-start gap-3 mb-2">
+        <h4 className="font-semibold text-foreground leading-tight">
+          {item.name}
+        </h4>
+        <div className="flex items-center gap-1 shrink-0">
+          <Star className="w-3.5 h-3.5 text-gold" fill="currentColor" />
+          <span className="text-xs font-medium">{item.rating.toFixed(1)}</span>
         </div>
-
-        {/* Category Badge */}
-        <Badge variant="secondary" className="shrink-0 text-xs">
-          {item.category}
-        </Badge>
       </div>
+
+      {item.description && (
+        <p className="text-xs text-muted-foreground mb-2 line-clamp-2">
+          {item.description}
+        </p>
+      )}
+
+      {/* Location */}
+      {item.diningHall && (
+        <div className="flex items-center gap-1 text-xs text-muted-foreground mb-2">
+          <MapPin className="w-3 h-3" />
+          <span>{hallNames[item.diningHall] || item.diningHall}</span>
+        </div>
+      )}
+
+      {/* Tags */}
+      {item.tags.length > 0 && (
+        <div className="flex flex-wrap gap-1 mb-2">
+          {item.tags.slice(0, 3).map((tag) => (
+            <Badge
+              key={tag}
+              variant={tagVariantMap[tag] || "secondary"}
+              className="text-xs px-2 py-0"
+            >
+              {tag === "vegetarian" && <Leaf className="w-2.5 h-2.5 mr-0.5" />}
+              {tag === "vegan" && <Leaf className="w-2.5 h-2.5 mr-0.5" />}
+              {tag === "high-protein" && <Flame className="w-2.5 h-2.5 mr-0.5" />}
+              {tag.replace("-", " ")}
+            </Badge>
+          ))}
+        </div>
+      )}
+
+      {/* Nutrition */}
+      {item.calories && (
+        <div className="flex items-center gap-3 text-xs text-muted-foreground">
+          <span>{item.calories} cal</span>
+          {item.protein && <span>{item.protein}g protein</span>}
+        </div>
+      )}
     </Card>
   );
 }
