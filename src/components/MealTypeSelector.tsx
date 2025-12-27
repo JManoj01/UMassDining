@@ -1,5 +1,10 @@
 import { cn } from "@/lib/utils";
-import { mealTypes } from "@/data/diningData";
+
+const mealTypes = [
+  { id: "breakfast", label: "Breakfast", icon: "🌅" },
+  { id: "lunch", label: "Lunch", icon: "☀️" },
+  { id: "dinner", label: "Dinner", icon: "🌙" },
+];
 
 interface MealTypeSelectorProps {
   selected: string;
@@ -7,7 +12,6 @@ interface MealTypeSelectorProps {
 }
 
 export function MealTypeSelector({ selected, onSelect }: MealTypeSelectorProps) {
-  // Determine current meal based on time
   const getCurrentMealType = () => {
     const hour = new Date().getHours();
     if (hour >= 7 && hour < 11) return "breakfast";
@@ -18,22 +22,22 @@ export function MealTypeSelector({ selected, onSelect }: MealTypeSelectorProps) 
   const currentMeal = getCurrentMealType();
 
   return (
-    <div className="flex gap-2 p-1 bg-secondary rounded-xl">
+    <div className="flex gap-1 p-1 bg-secondary rounded-lg">
       {mealTypes.map((meal) => (
         <button
           key={meal.id}
           onClick={() => onSelect(meal.id)}
           className={cn(
-            "flex-1 flex items-center justify-center gap-2 px-4 py-3 rounded-lg font-medium transition-all duration-200",
+            "flex-1 flex items-center justify-center gap-2 px-3 py-2 rounded-md font-medium text-sm transition-all",
             selected === meal.id
-              ? "bg-primary text-primary-foreground shadow-maroon"
-              : "text-muted-foreground hover:text-foreground hover:bg-background/50"
+              ? "bg-primary text-primary-foreground"
+              : "text-muted-foreground hover:text-foreground"
           )}
         >
-          <span className="text-lg">{meal.icon}</span>
+          <span>{meal.icon}</span>
           <span className="hidden sm:inline">{meal.label}</span>
           {meal.id === currentMeal && selected !== meal.id && (
-            <span className="w-2 h-2 rounded-full bg-gold animate-pulse-soft" />
+            <span className="w-1.5 h-1.5 rounded-full bg-gold animate-pulse-soft" />
           )}
         </button>
       ))}

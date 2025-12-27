@@ -14,7 +14,160 @@ export type Database = {
   }
   public: {
     Tables: {
-      [_ in never]: never
+      dining_halls: {
+        Row: {
+          breakfast_hours: string | null
+          created_at: string | null
+          dinner_hours: string | null
+          features: string[] | null
+          id: string
+          location: string
+          lunch_hours: string | null
+          name: string
+          short_name: string
+        }
+        Insert: {
+          breakfast_hours?: string | null
+          created_at?: string | null
+          dinner_hours?: string | null
+          features?: string[] | null
+          id: string
+          location: string
+          lunch_hours?: string | null
+          name: string
+          short_name: string
+        }
+        Update: {
+          breakfast_hours?: string | null
+          created_at?: string | null
+          dinner_hours?: string | null
+          features?: string[] | null
+          id?: string
+          location?: string
+          lunch_hours?: string | null
+          name?: string
+          short_name?: string
+        }
+        Relationships: []
+      }
+      meal_ratings: {
+        Row: {
+          created_at: string | null
+          id: string
+          menu_item_id: string | null
+          rating: number | null
+          user_id: string | null
+        }
+        Insert: {
+          created_at?: string | null
+          id?: string
+          menu_item_id?: string | null
+          rating?: number | null
+          user_id?: string | null
+        }
+        Update: {
+          created_at?: string | null
+          id?: string
+          menu_item_id?: string | null
+          rating?: number | null
+          user_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "meal_ratings_menu_item_id_fkey"
+            columns: ["menu_item_id"]
+            isOneToOne: false
+            referencedRelation: "menu_items"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      menu_items: {
+        Row: {
+          calories: number | null
+          carbs: number | null
+          category: string | null
+          created_at: string | null
+          description: string | null
+          dining_hall_id: string | null
+          fat: number | null
+          id: string
+          meal_type: Database["public"]["Enums"]["meal_type"]
+          menu_date: string
+          name: string
+          protein: number | null
+          tags: string[] | null
+        }
+        Insert: {
+          calories?: number | null
+          carbs?: number | null
+          category?: string | null
+          created_at?: string | null
+          description?: string | null
+          dining_hall_id?: string | null
+          fat?: number | null
+          id?: string
+          meal_type: Database["public"]["Enums"]["meal_type"]
+          menu_date?: string
+          name: string
+          protein?: number | null
+          tags?: string[] | null
+        }
+        Update: {
+          calories?: number | null
+          carbs?: number | null
+          category?: string | null
+          created_at?: string | null
+          description?: string | null
+          dining_hall_id?: string | null
+          fat?: number | null
+          id?: string
+          meal_type?: Database["public"]["Enums"]["meal_type"]
+          menu_date?: string
+          name?: string
+          protein?: number | null
+          tags?: string[] | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "menu_items_dining_hall_id_fkey"
+            columns: ["dining_hall_id"]
+            isOneToOne: false
+            referencedRelation: "dining_halls"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      user_preferences: {
+        Row: {
+          created_at: string | null
+          dietary_preferences: string[] | null
+          disliked_ingredients: string[] | null
+          favorite_halls: string[] | null
+          id: string
+          updated_at: string | null
+          user_id: string | null
+        }
+        Insert: {
+          created_at?: string | null
+          dietary_preferences?: string[] | null
+          disliked_ingredients?: string[] | null
+          favorite_halls?: string[] | null
+          id?: string
+          updated_at?: string | null
+          user_id?: string | null
+        }
+        Update: {
+          created_at?: string | null
+          dietary_preferences?: string[] | null
+          disliked_ingredients?: string[] | null
+          favorite_halls?: string[] | null
+          id?: string
+          updated_at?: string | null
+          user_id?: string | null
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never
@@ -23,7 +176,7 @@ export type Database = {
       [_ in never]: never
     }
     Enums: {
-      [_ in never]: never
+      meal_type: "breakfast" | "lunch" | "dinner"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -150,6 +303,8 @@ export type CompositeTypes<
 
 export const Constants = {
   public: {
-    Enums: {},
+    Enums: {
+      meal_type: ["breakfast", "lunch", "dinner"],
+    },
   },
 } as const
