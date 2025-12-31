@@ -1,18 +1,16 @@
 import { useState, useEffect, useMemo } from "react";
-import { Search, Filter, Clock } from "lucide-react";
+import { Search, RefreshCw } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
-import { Card } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
 import { supabase } from "@/integrations/supabase/client";
-import { MealTypeSelector } from "@/components/MealTypeSelector";
 import { MenuItemCard } from "@/components/MenuItemCard";
+import { toast } from "sonner";
 
 interface DiningHall {
   id: string;
   name: string;
   short_name: string;
-  location: string;
-  features: string[];
 }
 
 interface MenuItem {
@@ -30,158 +28,158 @@ interface MenuItem {
 }
 
 export function MenuBrowser() {
-  const [diningHalls, setDiningHalls] = useState<DiningHall[]>([]);
-  const [menuItems, setMenuItems] = useState<MenuItem[]>([]);
-  const [selectedHall, setSelectedHall] = useState<string>("all");
-  const [selectedMeal, setSelectedMeal] = useState<string>(() => {
-    const hour = new Date().getHours();
-    if (hour >= 7 && hour < 11) return "breakfast";
-    if (hour >= 11 && hour < 15) return "lunch";
+  const [halls, setHalls] = useState<DiningHall[]>([]);
+  const [items, setItems] = useState<MenuItem[]>([]);
+  const [selectedHall, setSelectedHall] = useState("all");
+  const [selectedMeal, setSelectedMeal] = useState(() => {
+    const h = new Date().getHours();
+    if (h >= 7 && h < 11) return "breakfast";
+    if (h >= 11 && h < 15) return "lunch";
     return "dinner";
   });
-  const [searchQuery, setSearchQuery] = useState("");
-  const [isLoading, setIsLoading] = useState(true);
+  const [search, setSearch] = useState("");
+  const [loading, setLoading] = useState(true);
+  const [scraping, setScraping] = useState(false);
 
   useEffect(() => {
     fetchData();
   }, []);
 
   const fetchData = async () => {
-    setIsLoading(true);
-    
-    const [hallsResponse, itemsResponse] = await Promise.all([
-      supabase.from("dining_halls").select("*"),
+    setLoading(true);
+    const [hallsRes, itemsRes] = await Promise.all([
+      supabase.from("dining_halls").select("id, name, short_name"),
       supabase.from("menu_items").select("*").eq("menu_date", new Date().toISOString().split("T")[0]),
     ]);
-
-    if (hallsResponse.data) {
-      setDiningHalls(hallsResponse.data);
-    }
-    if (itemsResponse.data) {
-      setMenuItems(itemsResponse.data as MenuItem[]);
-    }
-    
-    setIsLoading(false);
+    if (hallsRes.data) setHalls(hallsRes.data);
+    if (itemsRes.data) setItems(itemsRes.data as MenuItem[]);
+    setLoading(false);
   };
 
-  const filteredItems = useMemo(() => {
-    return menuItems.filter((item) => {
-      const matchesHall = selectedHall === "all" || item.dining_hall_id === selectedHall;
-      const matchesMeal = item.meal_type === selectedMeal;
-      const matchesSearch =
-        searchQuery === "" ||
-        item.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        (item.description?.toLowerCase().includes(searchQuery.toLowerCase()) ?? false);
-      return matchesHall && matchesMeal && matchesSearch;
-    });
-  }, [menuItems, selectedHall, selectedMeal, searchQuery]);
+  const handleScrape = async () => {
+    setScraping(true);
+    try {
+      const { data, error } = await supabase.functions.invoke("scrape-menus");
+      if (error) throw error;
+      toast.success(data.message || "Menus updated");
+      await fetchData();
+    } catch (e) {
+      toast.error("Failed to update menus");
+      console.error(e);
+    }
+    setScraping(false);
+  };
 
-  // Group by category
-  const groupedItems = useMemo(() => {
-    return filteredItems.reduce((acc, item) => {
-      const category = item.category || "Other";
-      if (!acc[category]) {
-        acc[category] = [];
-      }
-      acc[category].push(item);
+  const filtered = useMemo(() => {
+    return items.filter((i) => {
+      const matchHall = selectedHall === "all" || i.dining_hall_id === selectedHall;
+      const matchMeal = i.meal_type === selectedMeal;
+      const matchSearch = !search || i.name.toLowerCase().includes(search.toLowerCase());
+      return matchHall && matchMeal && matchSearch;
+    });
+  }, [items, selectedHall, selectedMeal, search]);
+
+  const grouped = useMemo(() => {
+    return filtered.reduce((acc, item) => {
+      const cat = item.category || "Other";
+      if (!acc[cat]) acc[cat] = [];
+      acc[cat].push(item);
       return acc;
     }, {} as Record<string, MenuItem[]>);
-  }, [filteredItems]);
+  }, [filtered]);
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4">
       {/* Header */}
-      <div>
-        <h1 className="text-2xl font-bold mb-2">Browse Menus</h1>
-        <p className="text-muted-foreground">
-          View today's menu items across all dining halls
-        </p>
+      <div className="flex items-center justify-between">
+        <h1 className="text-lg font-bold">Today's Menu</h1>
+        <Button variant="outline" size="sm" onClick={handleScrape} disabled={scraping} className="h-7 text-xs">
+          <RefreshCw className={`w-3 h-3 mr-1 ${scraping ? "animate-spin" : ""}`} />
+          {scraping ? "Updating..." : "Refresh"}
+        </Button>
       </div>
 
-      {/* Filters */}
-      <div className="flex flex-col lg:flex-row gap-4">
-        <div className="flex-1">
-          <MealTypeSelector selected={selectedMeal} onSelect={setSelectedMeal} />
+      {/* Filters Row */}
+      <div className="flex flex-wrap items-center gap-2">
+        {/* Meal Selector */}
+        <div className="flex gap-1 bg-muted rounded-md p-0.5">
+          {["breakfast", "lunch", "dinner"].map((m) => (
+            <button
+              key={m}
+              onClick={() => setSelectedMeal(m)}
+              className={`px-2.5 py-1 rounded text-xs font-medium transition-all ${
+                selectedMeal === m
+                  ? "bg-primary text-primary-foreground"
+                  : "text-muted-foreground hover:text-foreground"
+              }`}
+            >
+              {m.charAt(0).toUpperCase() + m.slice(1)}
+            </button>
+          ))}
         </div>
-        <div className="flex gap-2 flex-wrap lg:flex-nowrap">
-          <div className="relative flex-1 lg:w-64">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-            <Input
-              placeholder="Search items..."
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              className="pl-9"
-            />
-          </div>
-        </div>
-      </div>
 
-      {/* Dining Hall Pills */}
-      <div className="flex gap-2 flex-wrap">
-        <button
-          onClick={() => setSelectedHall("all")}
-          className={`px-4 py-2 rounded-full text-sm font-medium transition-all ${
-            selectedHall === "all"
-              ? "bg-primary text-primary-foreground"
-              : "bg-secondary text-muted-foreground hover:text-foreground"
-          }`}
-        >
-          All Halls
-        </button>
-        {diningHalls.map((hall) => (
+        {/* Hall Selector */}
+        <div className="flex gap-1 flex-wrap">
           <button
-            key={hall.id}
-            onClick={() => setSelectedHall(hall.id)}
-            className={`px-4 py-2 rounded-full text-sm font-medium transition-all ${
-              selectedHall === hall.id
-                ? "bg-primary text-primary-foreground"
-                : "bg-secondary text-muted-foreground hover:text-foreground"
+            onClick={() => setSelectedHall("all")}
+            className={`px-2.5 py-1 rounded-full text-xs font-medium transition-all ${
+              selectedHall === "all" ? "bg-primary text-primary-foreground" : "bg-muted text-muted-foreground"
             }`}
           >
-            {hall.short_name}
+            All
           </button>
-        ))}
+          {halls.map((h) => (
+            <button
+              key={h.id}
+              onClick={() => setSelectedHall(h.id)}
+              className={`px-2.5 py-1 rounded-full text-xs font-medium transition-all ${
+                selectedHall === h.id ? "bg-primary text-primary-foreground" : "bg-muted text-muted-foreground"
+              }`}
+            >
+              {h.short_name}
+            </button>
+          ))}
+        </div>
+
+        {/* Search */}
+        <div className="relative flex-1 min-w-[150px] max-w-[200px]">
+          <Search className="absolute left-2 top-1/2 -translate-y-1/2 w-3 h-3 text-muted-foreground" />
+          <Input
+            placeholder="Search..."
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            className="pl-7 h-7 text-xs"
+          />
+        </div>
       </div>
 
       {/* Content */}
-      {isLoading ? (
-        <div className="text-center py-12 text-muted-foreground">
-          Loading menus...
-        </div>
-      ) : Object.keys(groupedItems).length > 0 ? (
-        <div className="space-y-8">
-          {Object.entries(groupedItems).map(([category, items]) => (
-            <div key={category}>
-              <h2 className="text-lg font-bold mb-4 flex items-center gap-2">
-                {category}
-                <Badge variant="secondary">{items.length}</Badge>
+      {loading ? (
+        <div className="text-center py-8 text-muted-foreground text-sm">Loading...</div>
+      ) : Object.keys(grouped).length > 0 ? (
+        <div className="space-y-6">
+          {Object.entries(grouped).map(([cat, catItems]) => (
+            <div key={cat}>
+              <h2 className="text-sm font-semibold mb-2 flex items-center gap-2">
+                {cat}
+                <Badge variant="secondary" className="text-xs">{catItems.length}</Badge>
               </h2>
-              <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-3">
-                {items.map((item) => (
-                  <MenuItemCard 
-                    key={item.id} 
-                    item={{
-                      ...item,
-                      description: item.description || "",
-                      diningHall: item.dining_hall_id || "",
-                      mealType: item.meal_type,
-                      category: item.category || "",
-                      rating: 4.0,
-                    }} 
-                  />
+              <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+                {catItems.map((item) => (
+                  <MenuItemCard key={item.id} item={item} />
                 ))}
               </div>
             </div>
           ))}
         </div>
       ) : (
-        <Card variant="elevated" className="p-8 text-center">
-          <div className="text-4xl mb-4">🍽️</div>
-          <h3 className="text-lg font-bold mb-2">No menu items yet</h3>
-          <p className="text-muted-foreground text-sm">
-            Menu data will be loaded once the scraper fetches today's meals.
-          </p>
-        </Card>
+        <div className="text-center py-12">
+          <div className="text-3xl mb-2">🍽️</div>
+          <p className="text-sm text-muted-foreground">No menu items found</p>
+          <Button variant="outline" size="sm" className="mt-3" onClick={handleScrape}>
+            Fetch Today's Menu
+          </Button>
+        </div>
       )}
     </div>
   );
