@@ -11,9 +11,7 @@ const dietaryOptions = [
   { id: "vegetarian", label: "Vegetarian", icon: "🥬" },
   { id: "vegan", label: "Vegan", icon: "🌱" },
   { id: "gluten-free", label: "Gluten-Free", icon: "🌾" },
-  { id: "halal", label: "Halal", icon: "☪️" },
   { id: "dairy-free", label: "Dairy-Free", icon: "🥛" },
-  { id: "high-protein", label: "High Protein", icon: "💪" },
 ];
 
 const diningHallOptions = [

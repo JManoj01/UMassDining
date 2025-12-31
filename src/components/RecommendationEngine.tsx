@@ -1,22 +1,24 @@
 import { useState, useEffect, useMemo } from "react";
-import { Sparkles, RefreshCw, Cpu } from "lucide-react";
+import { Sparkles, RefreshCw } from "lucide-react";
 import { User } from "@supabase/supabase-js";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { supabase } from "@/integrations/supabase/client";
 import { MenuItemCard } from "@/components/MenuItemCard";
 import { recommender, MenuItem, UserPreferences, ScoredItem } from "@/lib/tensorflow/recommender";
+import { matchesDietFilters, type DietFilter } from "@/lib/menu/tagging";
 
 interface RecommendationEngineProps {
   user: User | null;
 }
+
+const SUPPORTED_DIET_FILTERS: DietFilter[] = ["vegetarian", "vegan", "gluten-free", "dairy-free"];
 
 export function RecommendationEngine({ user }: RecommendationEngineProps) {
   const [items, setItems] = useState<MenuItem[]>([]);
   const [prefs, setPrefs] = useState<UserPreferences | null>(null);
   const [recommendations, setRecommendations] = useState<ScoredItem[]>([]);
   const [loading, setLoading] = useState(true);
-  const [tfReady, setTfReady] = useState(false);
 
   const currentMeal = useMemo(() => {
     const h = new Date().getHours();
@@ -26,24 +28,16 @@ export function RecommendationEngine({ user }: RecommendationEngineProps) {
   }, []);
 
   useEffect(() => {
-    initTF();
+    // Keep TF as the engine, but do not show a label in the UI.
+    recommender.initialize().catch((e) => console.error("TF init error:", e));
     fetchData();
     return () => recommender.dispose();
   }, [user]);
 
-  const initTF = async () => {
-    try {
-      await recommender.initialize();
-      setTfReady(true);
-    } catch (e) {
-      console.error("TF init error:", e);
-    }
-  };
-
   const fetchData = async () => {
     setLoading(true);
     const today = new Date().toISOString().split("T")[0];
-    
+
     const { data: menuData } = await supabase
       .from("menu_items")
       .select("*")
@@ -70,7 +64,27 @@ export function RecommendationEngine({ user }: RecommendationEngineProps) {
   }, [items, prefs, loading, currentMeal]);
 
   const generateRecommendations = async () => {
-    const mealItems = items.filter((i) => i.meal_type === currentMeal);
+    const requiredDiet = (prefs?.dietary_preferences ?? [])
+      .map((d) => d.toLowerCase())
+      .filter((d): d is DietFilter => (SUPPORTED_DIET_FILTERS as string[]).includes(d));
+
+    // 1) Time-based meal selection
+    let mealItems = items.filter((i) => i.meal_type === currentMeal);
+
+    // 2) Strict dietary filtering (prevents meat appearing under vegan/vegetarian)
+    if (requiredDiet.length) {
+      mealItems = mealItems.filter((i) => matchesDietFilters(i, requiredDiet));
+    }
+
+    // 3) Hard exclude disliked ingredients (instead of just penalizing)
+    const disliked = (prefs?.disliked_ingredients ?? []).map((x) => x.toLowerCase()).filter(Boolean);
+    if (disliked.length) {
+      mealItems = mealItems.filter((i) => {
+        const blob = `${i.name} ${i.description ?? ""}`.toLowerCase();
+        return !disliked.some((ing) => blob.includes(ing));
+      });
+    }
+
     if (mealItems.length === 0) {
       setRecommendations([]);
       return;
@@ -78,9 +92,12 @@ export function RecommendationEngine({ user }: RecommendationEngineProps) {
 
     try {
       const scored = await recommender.scoreItems(mealItems, prefs);
-      setRecommendations(scored.slice(0, 8));
+      // Re-apply dietary filter after scoring as an extra guardrail
+      const safe = requiredDiet.length ? scored.filter((i) => matchesDietFilters(i, requiredDiet)) : scored;
+      setRecommendations(safe.slice(0, 8));
     } catch (e) {
       console.error("Scoring error:", e);
+      setRecommendations([]);
     }
   };
 
@@ -90,17 +107,10 @@ export function RecommendationEngine({ user }: RecommendationEngineProps) {
 
   return (
     <div className="space-y-4">
-      {/* Header */}
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2">
           <Sparkles className="w-4 h-4 text-primary" />
           <h1 className="text-lg font-bold">For You</h1>
-          {tfReady && (
-            <Badge variant="secondary" className="text-xs gap-1">
-              <Cpu className="w-2.5 h-2.5" />
-              TensorFlow.js
-            </Badge>
-          )}
         </div>
         <Button variant="ghost" size="sm" onClick={fetchData} className="h-7 text-xs">
           <RefreshCw className="w-3 h-3 mr-1" />
@@ -108,7 +118,6 @@ export function RecommendationEngine({ user }: RecommendationEngineProps) {
         </Button>
       </div>
 
-      {/* Status */}
       {!user && (
         <div className="bg-muted/50 rounded-lg p-3 text-sm text-muted-foreground">
           Sign in to save preferences and get personalized recommendations.
@@ -119,28 +128,28 @@ export function RecommendationEngine({ user }: RecommendationEngineProps) {
         <div className="flex flex-wrap items-center gap-1.5">
           <span className="text-xs text-muted-foreground">Filtering:</span>
           {prefs.dietary_preferences.map((d) => (
-            <Badge key={d} variant="maroon" className="text-xs">{d}</Badge>
+            <Badge key={d} variant="maroon" className="text-xs">
+              {d}
+            </Badge>
           ))}
           {prefs.favorite_halls.map((h) => (
-            <Badge key={h} variant="secondary" className="text-xs">{h}</Badge>
+            <Badge key={h} variant="secondary" className="text-xs">
+              {h}
+            </Badge>
           ))}
         </div>
       )}
 
-      {/* Recommendations */}
       {recommendations.length > 0 ? (
         <div className="space-y-3">
           <h2 className="text-sm font-semibold">
             Top picks for {currentMeal.charAt(0).toUpperCase() + currentMeal.slice(1)}
           </h2>
           <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
-            {recommendations.map((item, i) => (
+            {recommendations.map((item) => (
               <div key={item.id} className="relative">
                 <MenuItemCard item={item} />
-                <Badge
-                  variant="maroon"
-                  className="absolute top-2 right-2 text-xs opacity-80"
-                >
+                <Badge variant="maroon" className="absolute top-2 right-2 text-xs opacity-80">
                   {Math.round(item.score)}%
                 </Badge>
               </div>
@@ -151,9 +160,12 @@ export function RecommendationEngine({ user }: RecommendationEngineProps) {
         <div className="text-center py-12">
           <div className="text-3xl mb-2">🤖</div>
           <p className="text-sm text-muted-foreground">No recommendations available</p>
-          <p className="text-xs text-muted-foreground mt-1">Refresh menus to generate recommendations</p>
+          <p className="text-xs text-muted-foreground mt-1">
+            Try widening filters or refreshing menus.
+          </p>
         </div>
       )}
     </div>
   );
 }
+

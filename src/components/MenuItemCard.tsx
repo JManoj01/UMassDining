@@ -1,6 +1,7 @@
-import { Leaf, Flame, MapPin } from "lucide-react";
+import { MapPin } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { detectAllergens, inferDietaryTags } from "@/lib/menu/tagging";
 
 interface MenuItem {
   id: string;
@@ -23,17 +24,25 @@ const hallNames: Record<string, string> = {
   hampshire: "Hampshire",
 };
 
-const tagStyles: Record<string, string> = {
-  vegetarian: "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400",
-  vegan: "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400",
-  "gluten-free": "bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400",
-  halal: "bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400",
-  "high-protein": "bg-primary/10 text-primary",
-  healthy: "bg-primary/10 text-primary",
+const tagVariantMap: Record<
+  string,
+  "vegetarian" | "vegan" | "glutenFree" | "dairyFree" | "halal" | "maroon" | "secondary"
+> = {
+  vegetarian: "vegetarian",
+  vegan: "vegan",
+  "gluten-free": "glutenFree",
+  "dairy-free": "dairyFree",
+  halal: "halal",
+  "high-protein": "maroon",
+  healthy: "maroon",
 };
 
 export function MenuItemCard({ item }: { item: MenuItem }) {
-  const tags = item.tags || [];
+  const inferredTags = inferDietaryTags({ name: item.name, description: item.description, tags: item.tags });
+  const allergens = detectAllergens({ name: item.name, description: item.description, tags: item.tags });
+
+  const showNutrition =
+    item.calories != null || item.protein != null || item.carbs != null || item.fat != null;
 
   return (
     <Card className="p-3 hover:shadow-md transition-shadow">
@@ -50,30 +59,41 @@ export function MenuItemCard({ item }: { item: MenuItem }) {
         </div>
       )}
 
-      {tags.length > 0 && (
+      {/* Dietary tags */}
+      {inferredTags.length > 0 && (
         <div className="flex flex-wrap gap-1 mb-1.5">
-          {tags.slice(0, 3).map((tag) => (
-            <span
-              key={tag}
-              className={`inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded text-xs font-medium ${
-                tagStyles[tag] || "bg-muted text-muted-foreground"
-              }`}
-            >
-              {tag === "vegetarian" && <Leaf className="w-2 h-2" />}
-              {tag === "vegan" && <Leaf className="w-2 h-2" />}
-              {tag === "high-protein" && <Flame className="w-2 h-2" />}
-              {tag.replace("-", " ")}
-            </span>
+          {inferredTags
+            .filter((t) => ["vegetarian", "vegan", "gluten-free", "dairy-free"].includes(t))
+            .slice(0, 4)
+            .map((tag) => (
+              <Badge key={tag} variant={tagVariantMap[tag] || "secondary"} className="text-xs">
+                {tag.replace("-", " ")}
+              </Badge>
+            ))}
+        </div>
+      )}
+
+      {/* Allergen detection */}
+      {allergens.length > 0 && (
+        <div className="flex flex-wrap gap-1 mb-1.5">
+          {allergens.map((a) => (
+            <Badge key={a} variant="destructive" className="text-xs">
+              {a}
+            </Badge>
           ))}
         </div>
       )}
 
-      {item.calories && (
-        <div className="flex items-center gap-2 text-xs text-muted-foreground">
-          <span>{item.calories} cal</span>
-          {item.protein && <span>• {item.protein}g protein</span>}
+      {/* Nutrition */}
+      {showNutrition && (
+        <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+          {item.calories != null && <span>{item.calories} cal</span>}
+          {item.protein != null && <span>• P {item.protein}g</span>}
+          {item.carbs != null && <span>• C {item.carbs}g</span>}
+          {item.fat != null && <span>• F {item.fat}g</span>}
         </div>
       )}
     </Card>
   );
 }
+
