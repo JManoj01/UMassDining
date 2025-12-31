@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { Helmet } from "react-helmet-async";
-import { Sparkles, Settings, LogOut, User as UserIcon } from "lucide-react";
+import { Sparkles, LogOut, User as UserIcon } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { User, Session } from "@supabase/supabase-js";
 import { Button } from "@/components/ui/button";
@@ -15,11 +15,10 @@ type Tab = "recommendations" | "menus" | "preferences";
 const Index = () => {
   const [user, setUser] = useState<User | null>(null);
   const [session, setSession] = useState<Session | null>(null);
-  const [activeTab, setActiveTab] = useState<Tab>("recommendations");
+  const [activeTab, setActiveTab] = useState<Tab>("menus");
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
-    // Set up auth state listener FIRST
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       (event, session) => {
         setSession(session);
@@ -28,7 +27,6 @@ const Index = () => {
       }
     );
 
-    // THEN check for existing session
     supabase.auth.getSession().then(({ data: { session } }) => {
       setSession(session);
       setUser(session?.user ?? null);
@@ -43,7 +41,7 @@ const Index = () => {
     if (error) {
       toast.error("Error signing out");
     } else {
-      toast.success("Signed out successfully");
+      toast.success("Signed out");
     }
   };
 
@@ -58,42 +56,36 @@ const Index = () => {
   return (
     <>
       <Helmet>
-        <title>UMass Dining Recommendations | Personalized Meal Suggestions</title>
-        <meta
-          name="description"
-          content="Get personalized meal recommendations from UMass Amherst dining halls based on your dietary preferences."
-        />
+        <title>UMass Dining | Today's Menu & Recommendations</title>
+        <meta name="description" content="UMass Amherst dining hall menus and personalized meal recommendations." />
       </Helmet>
 
       <div className="min-h-screen bg-background">
-        {/* Header */}
-        <header className="sticky top-0 z-50 bg-card/95 backdrop-blur-md border-b border-border">
-          <div className="container mx-auto px-4">
-            <div className="flex items-center justify-between h-14">
+        {/* Minimal Header */}
+        <header className="sticky top-0 z-50 bg-background/95 backdrop-blur border-b border-border">
+          <div className="max-w-5xl mx-auto px-4">
+            <div className="flex items-center justify-between h-12">
               {/* Logo */}
               <div className="flex items-center gap-2">
-                <div className="w-8 h-8 rounded-lg bg-gradient-maroon flex items-center justify-center">
-                  <Sparkles className="w-4 h-4 text-primary-foreground" />
+                <div className="w-7 h-7 rounded-md bg-gradient-maroon flex items-center justify-center">
+                  <Sparkles className="w-3.5 h-3.5 text-primary-foreground" />
                 </div>
-                <div>
-                  <span className="font-bold text-foreground">UMass</span>
-                  <span className="font-bold text-primary"> Rec</span>
-                </div>
+                <span className="font-semibold text-sm">UMass Dining</span>
               </div>
 
               {/* Tabs */}
-              <nav className="hidden md:flex items-center gap-1 bg-secondary rounded-lg p-1">
+              <nav className="flex items-center gap-0.5 bg-muted rounded-md p-0.5">
                 {[
+                  { id: "menus", label: "Menus" },
                   { id: "recommendations", label: "For You" },
-                  { id: "menus", label: "Browse Menus" },
-                  { id: "preferences", label: "Preferences" },
+                  { id: "preferences", label: "Settings" },
                 ].map((tab) => (
                   <button
                     key={tab.id}
                     onClick={() => setActiveTab(tab.id as Tab)}
-                    className={`px-4 py-1.5 rounded-md text-sm font-medium transition-all ${
+                    className={`px-3 py-1 rounded text-xs font-medium transition-all ${
                       activeTab === tab.id
-                        ? "bg-primary text-primary-foreground"
+                        ? "bg-background text-foreground shadow-sm"
                         : "text-muted-foreground hover:text-foreground"
                     }`}
                   >
@@ -102,66 +94,29 @@ const Index = () => {
                 ))}
               </nav>
 
-              {/* User Menu */}
+              {/* User */}
               <div className="flex items-center gap-2">
                 {user ? (
-                  <>
-                    <span className="hidden sm:inline text-sm text-muted-foreground">
-                      {user.email?.split("@")[0]}
-                    </span>
-                    <Button variant="ghost" size="icon" onClick={handleSignOut}>
-                      <LogOut className="w-4 h-4" />
-                    </Button>
-                  </>
+                  <Button variant="ghost" size="sm" onClick={handleSignOut} className="h-7 text-xs">
+                    <LogOut className="w-3 h-3 mr-1" />
+                    Sign Out
+                  </Button>
                 ) : (
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => setActiveTab("preferences")}
-                  >
-                    <UserIcon className="w-4 h-4 mr-2" />
+                  <Button variant="ghost" size="sm" onClick={() => setActiveTab("preferences")} className="h-7 text-xs">
+                    <UserIcon className="w-3 h-3 mr-1" />
                     Sign In
                   </Button>
                 )}
               </div>
             </div>
-
-            {/* Mobile Tabs */}
-            <div className="md:hidden flex gap-1 pb-2 overflow-x-auto">
-              {[
-                { id: "recommendations", label: "For You" },
-                { id: "menus", label: "Menus" },
-                { id: "preferences", label: "Settings" },
-              ].map((tab) => (
-                <button
-                  key={tab.id}
-                  onClick={() => setActiveTab(tab.id as Tab)}
-                  className={`px-3 py-1.5 rounded-md text-sm font-medium whitespace-nowrap transition-all ${
-                    activeTab === tab.id
-                      ? "bg-primary text-primary-foreground"
-                      : "bg-secondary text-muted-foreground"
-                  }`}
-                >
-                  {tab.label}
-                </button>
-              ))}
-            </div>
           </div>
         </header>
 
-        {/* Main Content */}
-        <main className="container mx-auto px-4 py-6">
-          {activeTab === "recommendations" && (
-            <RecommendationEngine user={user} />
-          )}
+        {/* Main */}
+        <main className="max-w-5xl mx-auto px-4 py-6">
           {activeTab === "menus" && <MenuBrowser />}
-          {activeTab === "preferences" && (
-            user ? (
-              <PreferencesPanel user={user} />
-            ) : (
-              <AuthPage />
-            )
-          )}
+          {activeTab === "recommendations" && <RecommendationEngine user={user} />}
+          {activeTab === "preferences" && (user ? <PreferencesPanel user={user} /> : <AuthPage />)}
         </main>
       </div>
     </>

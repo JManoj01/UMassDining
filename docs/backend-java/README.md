@@ -10,6 +10,16 @@ This document provides complete Java/Spring Boot backend specifications for the 
 - **PostgreSQL 15+**
 - **Maven/Gradle**
 
+## UMass Dining Hall URLs
+
+The platform scrapes menu data from:
+```
+https://umassdining.com/locations-menus/worcester
+https://umassdining.com/locations-menus/franklin
+https://umassdining.com/locations-menus/berkshire
+https://umassdining.com/locations-menus/hampshire
+```
+
 ## Project Structure
 ```
 src/main/java/com/umassdining/
@@ -86,3 +96,18 @@ mvn spring-boot:run
 
 ## Database Schema
 See the SQL files in the `sql/` directory for complete schema.
+
+## Frontend Integration
+
+The React frontend (built with Lovable) communicates with:
+1. **Supabase Edge Functions** - For real-time scraping via Firecrawl
+2. **This Java Backend** - For recommendation logic and data management
+
+## TensorFlow.js Integration
+
+The frontend includes a TensorFlow.js-based recommender that:
+1. Encodes menu items as feature vectors
+2. Uses a neural network to score items
+3. Combines ML predictions with user preference rules
+
+For the Java backend equivalent, see `RecommendationService.java`.
