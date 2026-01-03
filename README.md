@@ -1,73 +1,107 @@
-# Welcome to your Lovable project
+# UMass Dining Recommendation Platform
 
-## Project info
+A personalized meal recommendation system for UMass Amherst dining halls. Browse daily menus from Worcester, Franklin, Berkshire, and Hampshire dining commons, and get AI-powered recommendations based on your dietary preferences.
 
-**URL**: https://lovable.dev/projects/REPLACE_WITH_PROJECT_ID
+## Features
 
-## How can I edit this code?
+- **Daily Menu Scraping**: Automatically fetches real menu data from all four UMass dining halls
+- **Personalized Recommendations**: TensorFlow.js-powered recommendation engine learns your preferences
+- **Dietary Filtering**: Support for vegetarian, vegan, gluten-free, and dairy-free diets
+- **Allergen Detection**: Identifies common allergens (nuts, soy, shellfish, eggs, wheat, dairy)
+- **Nutrition Tracking**: View calories, protein, carbs, and fat for each menu item
+- **Time-Based Suggestions**: Automatic meal recommendations for breakfast, lunch, and dinner
 
-There are several ways of editing your application.
+## Tech Stack
 
-**Use Lovable**
+- **Frontend**: React, TypeScript, Vite, Tailwind CSS, shadcn/ui
+- **Backend**: Supabase (PostgreSQL, Edge Functions)
+- **ML**: TensorFlow.js for client-side recommendations
+- **Scraping**: Firecrawl API for menu data extraction
 
-Simply visit the [Lovable Project](https://lovable.dev/projects/REPLACE_WITH_PROJECT_ID) and start prompting.
+## Getting Started
 
-Changes made via Lovable will be committed automatically to this repo.
+### Prerequisites
 
-**Use your preferred IDE**
+- Node.js 18+
+- npm or bun
 
-If you want to work locally using your own IDE, you can clone this repo and push changes. Pushed changes will also be reflected in Lovable.
+### Installation
 
-The only requirement is having Node.js & npm installed - [install with nvm](https://github.com/nvm-sh/nvm#installing-and-updating)
+```bash
+# Clone the repository
+git clone <repository-url>
+cd umass-dining
 
-Follow these steps:
+# Install dependencies
+npm install
 
-```sh
-# Step 1: Clone the repository using the project's Git URL.
-git clone <YOUR_GIT_URL>
-
-# Step 2: Navigate to the project directory.
-cd <YOUR_PROJECT_NAME>
-
-# Step 3: Install the necessary dependencies.
-npm i
-
-# Step 4: Start the development server with auto-reloading and an instant preview.
+# Start development server
 npm run dev
 ```
 
-**Edit a file directly in GitHub**
+### Environment Variables
 
-- Navigate to the desired file(s).
-- Click the "Edit" button (pencil icon) at the top right of the file view.
-- Make your changes and commit the changes.
+Create a `.env` file with:
 
-**Use GitHub Codespaces**
+```env
+VITE_SUPABASE_URL=your_supabase_url
+VITE_SUPABASE_PUBLISHABLE_KEY=your_supabase_anon_key
+```
 
-- Navigate to the main page of your repository.
-- Click on the "Code" button (green button) near the top right.
-- Select the "Codespaces" tab.
-- Click on "New codespace" to launch a new Codespace environment.
-- Edit files directly within the Codespace and commit and push your changes once you're done.
+## Architecture
 
-## What technologies are used for this project?
+```
+src/
+├── components/          # React components
+│   ├── ui/             # shadcn/ui components
+│   ├── MenuBrowser.tsx # Menu browsing interface
+│   ├── RecommendationEngine.tsx # AI recommendations
+│   └── PreferencesPanel.tsx # User preferences
+├── lib/
+│   ├── menu/           # Menu tagging and filtering
+│   └── tensorflow/     # Recommendation engine
+├── pages/              # Route pages
+└── integrations/       # Supabase client
 
-This project is built with:
+supabase/
+└── functions/
+    └── scrape-menus/   # Edge function for menu scraping
 
-- Vite
-- TypeScript
-- React
-- shadcn-ui
-- Tailwind CSS
+docs/
+├── backend-java/       # Java/Spring Boot backend reference
+└── scraper-python/     # Python scraper reference
+```
 
-## How can I deploy this project?
+## Dining Halls
 
-Simply open [Lovable](https://lovable.dev/projects/REPLACE_WITH_PROJECT_ID) and click on Share -> Publish.
+| Hall | Location | Specialty |
+|------|----------|-----------|
+| Worcester | Central Campus | Home-style comfort food |
+| Franklin | Southwest | International cuisine |
+| Berkshire | Southwest | Asian fusion, sushi |
+| Hampshire | Northeast | Pizza, late-night |
 
-## Can I connect a custom domain to my Lovable project?
+## API Endpoints
 
-Yes, you can!
+### Scrape Menus
+```
+POST /functions/v1/scrape-menus
+```
+Triggers menu scraping for all dining halls. Runs automatically daily.
 
-To connect a domain, navigate to Project > Settings > Domains and click Connect Domain.
+## Contributing
 
-Read more here: [Setting up a custom domain](https://docs.lovable.dev/features/custom-domain#custom-domain)
+1. Fork the repository
+2. Create a feature branch (`git checkout -b feature/amazing-feature`)
+3. Commit your changes (`git commit -m 'Add amazing feature'`)
+4. Push to the branch (`git push origin feature/amazing-feature`)
+5. Open a Pull Request
+
+## License
+
+MIT License - see LICENSE file for details.
+
+## Acknowledgments
+
+- UMass Dining Services for the original menu data
+- Built for UMass Amherst students 🐘

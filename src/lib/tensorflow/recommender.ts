@@ -25,24 +25,35 @@ export interface ScoredItem extends MenuItem {
   confidence: number;
 }
 
-// Feature encoding maps
-const TAGS = ["vegetarian", "vegan", "gluten-free", "halal", "dairy-free", "high-protein", "healthy"];
+// Feature encoding constants
+const DIETARY_TAGS = ["vegetarian", "vegan", "gluten-free", "dairy-free", "halal", "kosher"];
 const HALLS = ["worcester", "franklin", "berkshire", "hampshire"];
 const MEALS = ["breakfast", "lunch", "dinner"];
-const CATEGORIES = ["Grill Station", "Pizza Station", "Pasta Station", "Vegetarian", "Salad Bar", "Deli", "Desserts", "International", "Main", "Hot Breakfast", "Other"];
+const CATEGORIES = [
+  "Grill", "Pizza", "Pasta", "Plant-Based", "Salad Bar", "Deli",
+  "Desserts", "Global", "Breakfast", "Soups", "Comfort", "Entrees"
+];
+
+// Scoring weights for personalization
+const WEIGHTS = {
+  dietaryMatch: 35,      // Strong boost for matching dietary preferences
+  hallPreference: 15,    // Moderate boost for favorite halls
+  dislikedPenalty: -100, // Hard penalty for disliked ingredients
+  nutritionBonus: 5,     // Small bonus for good nutrition
+  varietyBonus: 3,       // Small bonus for variety
+};
 
 export class TFRecommender {
   private model: tf.LayersModel | null = null;
   private isReady = false;
 
-  // Create a simple neural network for scoring
-  async initialize() {
+  async initialize(): Promise<void> {
     if (this.isReady) return;
 
     try {
-      // Input: [tags(7), hall(4), meal(3), category(11), nutrition(4), preferences match scores(3)]
-      // Total: 32 features
-      const inputSize = TAGS.length + HALLS.length + MEALS.length + CATEGORIES.length + 4 + 3;
+      // Feature vector size:
+      // Dietary tags (6) + Halls (4) + Meals (3) + Categories (12) + Nutrition (4) + Preference scores (4)
+      const inputSize = DIETARY_TAGS.length + HALLS.length + MEALS.length + CATEGORIES.length + 4 + 4;
 
       this.model = tf.sequential({
         layers: [
@@ -52,12 +63,14 @@ export class TFRecommender {
             inputShape: [inputSize],
             kernelInitializer: "glorotNormal",
           }),
+          tf.layers.batchNormalization(),
           tf.layers.dropout({ rate: 0.2 }),
           tf.layers.dense({
             units: 32,
             activation: "relu",
             kernelInitializer: "glorotNormal",
           }),
+          tf.layers.dropout({ rate: 0.1 }),
           tf.layers.dense({
             units: 16,
             activation: "relu",
@@ -78,20 +91,24 @@ export class TFRecommender {
       });
 
       this.isReady = true;
-      console.log("TensorFlow.js recommender initialized");
+      console.log("Recommendation engine initialized");
     } catch (error) {
-      console.error("Error initializing TF model:", error);
-      throw error;
+      console.error("Error initializing model:", error);
+      // Continue without the model - will use rule-based scoring
     }
   }
 
-  // Encode a menu item into feature vector
+  private normalizeTag(tag: string): string {
+    return tag.toLowerCase().replace(/_/g, "-").trim();
+  }
+
   private encodeItem(item: MenuItem, preferences: UserPreferences | null): number[] {
     const features: number[] = [];
+    const itemTags = item.tags.map(t => this.normalizeTag(t));
 
-    // One-hot encode tags
-    TAGS.forEach((tag) => {
-      features.push(item.tags.includes(tag) ? 1 : 0);
+    // One-hot encode dietary tags
+    DIETARY_TAGS.forEach((tag) => {
+      features.push(itemTags.includes(tag) ? 1 : 0);
     });
 
     // One-hot encode hall
@@ -106,115 +123,139 @@ export class TFRecommender {
 
     // One-hot encode category
     CATEGORIES.forEach((cat) => {
-      features.push(item.category === cat ? 1 : 0);
+      features.push((item.category || "").toLowerCase().includes(cat.toLowerCase()) ? 1 : 0);
     });
 
-    // Normalize nutrition values
-    features.push((item.calories || 0) / 1000);
-    features.push((item.protein || 0) / 50);
-    features.push((item.carbs || 0) / 100);
-    features.push((item.fat || 0) / 50);
+    // Normalized nutrition values (0-1 scale)
+    features.push(Math.min((item.calories || 0) / 800, 1));
+    features.push(Math.min((item.protein || 0) / 50, 1));
+    features.push(Math.min((item.carbs || 0) / 100, 1));
+    features.push(Math.min((item.fat || 0) / 40, 1));
 
     // Preference matching scores
     if (preferences) {
-      // Diet match score
-      const dietMatch = preferences.dietary_preferences.filter((d) =>
-        item.tags.includes(d)
-      ).length / Math.max(preferences.dietary_preferences.length, 1);
+      const prefTags = preferences.dietary_preferences.map(t => this.normalizeTag(t));
+      
+      // Dietary match score
+      const dietMatch = prefTags.length > 0
+        ? prefTags.filter(d => itemTags.includes(d)).length / prefTags.length
+        : 0.5;
       features.push(dietMatch);
 
       // Hall preference score
       const hallMatch = preferences.favorite_halls.includes(item.dining_hall_id || "") ? 1 : 0;
       features.push(hallMatch);
 
-      // Disliked ingredient penalty
-      const hasDisliked = preferences.disliked_ingredients.some((ing) =>
-        item.name.toLowerCase().includes(ing.toLowerCase()) ||
-        (item.description?.toLowerCase().includes(ing.toLowerCase()) ?? false)
+      // Disliked ingredient penalty (inverted: 1 = no disliked, 0 = has disliked)
+      const itemText = `${item.name} ${item.description || ""}`.toLowerCase();
+      const hasDisliked = preferences.disliked_ingredients.some(
+        ing => itemText.includes(ing.toLowerCase())
       );
       features.push(hasDisliked ? 0 : 1);
+
+      // Preference intensity (how strong preferences are)
+      const prefIntensity = Math.min(
+        (prefTags.length + preferences.favorite_halls.length) / 6,
+        1
+      );
+      features.push(prefIntensity);
     } else {
-      features.push(0.5, 0.5, 1);
+      features.push(0.5, 0.5, 1, 0);
     }
 
     return features;
   }
 
-  // Score items using the model
   async scoreItems(
     items: MenuItem[],
     preferences: UserPreferences | null
   ): Promise<ScoredItem[]> {
-    if (!this.isReady || !this.model) {
+    if (!this.isReady) {
       await this.initialize();
     }
 
-    if (!this.model) {
-      // Fallback to rule-based scoring
-      return this.ruleBasedScoring(items, preferences);
-    }
-
+    // Use hybrid scoring: ML model + rule-based adjustments
     try {
-      // Encode all items
-      const features = items.map((item) => this.encodeItem(item, preferences));
+      const features = items.map(item => this.encodeItem(item, preferences));
       
-      // Create tensor
-      const inputTensor = tf.tensor2d(features);
+      let mlScores: Float32Array | null = null;
       
-      // Get predictions
-      const predictions = this.model.predict(inputTensor) as tf.Tensor;
-      const scores = await predictions.data();
-      
-      // Clean up tensors
-      inputTensor.dispose();
-      predictions.dispose();
+      if (this.model) {
+        const inputTensor = tf.tensor2d(features);
+        const predictions = this.model.predict(inputTensor) as tf.Tensor;
+        mlScores = await predictions.data() as Float32Array;
+        inputTensor.dispose();
+        predictions.dispose();
+      }
 
-      // Combine predictions with rule-based adjustments
       const scoredItems: ScoredItem[] = items.map((item, i) => {
-        let score = scores[i] * 100;
-        
-        // Apply preference boosts/penalties
+        // Start with ML score or baseline
+        let score = mlScores ? mlScores[i] * 60 : 50;
+        let confidence = mlScores ? Math.abs(mlScores[i] - 0.5) * 2 : 0.5;
+
+        // Apply rule-based adjustments for personalization
         if (preferences) {
-          // Boost for matching dietary preferences
-          preferences.dietary_preferences.forEach((diet) => {
-            if (item.tags.includes(diet)) score += 10;
-          });
+          const prefTags = preferences.dietary_preferences.map(t => this.normalizeTag(t));
+          const itemTags = item.tags.map(t => this.normalizeTag(t));
 
-          // Boost for favorite halls
-          if (item.dining_hall_id && preferences.favorite_halls.includes(item.dining_hall_id)) {
-            score += 8;
-          }
-
-          // Penalty for disliked ingredients
-          preferences.disliked_ingredients.forEach((ing) => {
-            const lower = ing.toLowerCase();
-            if (
-              item.name.toLowerCase().includes(lower) ||
-              (item.description?.toLowerCase().includes(lower) ?? false)
-            ) {
-              score -= 40;
+          // Dietary preference matching (strong signal)
+          let dietaryMatches = 0;
+          prefTags.forEach(diet => {
+            if (itemTags.includes(diet)) {
+              dietaryMatches++;
+            }
+            // Vegan items also satisfy vegetarian preference
+            if (diet === "vegetarian" && itemTags.includes("vegan")) {
+              dietaryMatches++;
+            }
+            // Vegan items also satisfy dairy-free preference
+            if (diet === "dairy-free" && itemTags.includes("vegan")) {
+              dietaryMatches++;
             }
           });
+          
+          if (prefTags.length > 0 && dietaryMatches > 0) {
+            score += WEIGHTS.dietaryMatch * (dietaryMatches / prefTags.length);
+          }
+
+          // Favorite hall boost
+          if (item.dining_hall_id && preferences.favorite_halls.includes(item.dining_hall_id)) {
+            score += WEIGHTS.hallPreference;
+          }
+
+          // Disliked ingredient penalty (hard filter in practice)
+          const itemText = `${item.name} ${item.description || ""}`.toLowerCase();
+          const hasDisliked = preferences.disliked_ingredients.some(
+            ing => ing.trim() && itemText.includes(ing.toLowerCase())
+          );
+          if (hasDisliked) {
+            score += WEIGHTS.dislikedPenalty;
+          }
         }
 
-        // Bonus for high protein
-        if (item.protein && item.protein > 25) score += 3;
+        // Nutrition bonus for high protein, reasonable calories
+        if (item.protein && item.protein > 20) {
+          score += WEIGHTS.nutritionBonus;
+        }
+        if (item.calories && item.calories > 100 && item.calories < 600) {
+          score += WEIGHTS.nutritionBonus;
+        }
 
         return {
           ...item,
           score: Math.max(0, Math.min(100, score)),
-          confidence: Math.abs(scores[i] - 0.5) * 2,
+          confidence,
         };
       });
 
+      // Sort by score descending
       return scoredItems.sort((a, b) => b.score - a.score);
     } catch (error) {
-      console.error("TF scoring error, falling back to rules:", error);
+      console.error("Scoring error, using rule-based fallback:", error);
       return this.ruleBasedScoring(items, preferences);
     }
   }
 
-  // Fallback rule-based scoring
   private ruleBasedScoring(
     items: MenuItem[],
     preferences: UserPreferences | null
@@ -222,28 +263,34 @@ export class TFRecommender {
     return items
       .map((item) => {
         let score = 50;
+        const itemTags = item.tags.map(t => this.normalizeTag(t));
 
         if (preferences) {
-          preferences.dietary_preferences.forEach((diet) => {
-            if (item.tags.includes(diet)) score += 20;
+          const prefTags = preferences.dietary_preferences.map(t => this.normalizeTag(t));
+
+          // Dietary matching
+          prefTags.forEach(diet => {
+            if (itemTags.includes(diet)) score += 25;
+            if (diet === "vegetarian" && itemTags.includes("vegan")) score += 25;
+            if (diet === "dairy-free" && itemTags.includes("vegan")) score += 15;
           });
 
+          // Hall preference
           if (item.dining_hall_id && preferences.favorite_halls.includes(item.dining_hall_id)) {
             score += 15;
           }
 
-          preferences.disliked_ingredients.forEach((ing) => {
-            const lower = ing.toLowerCase();
-            if (
-              item.name.toLowerCase().includes(lower) ||
-              (item.description?.toLowerCase().includes(lower) ?? false)
-            ) {
-              score -= 40;
+          // Disliked ingredients
+          const itemText = `${item.name} ${item.description || ""}`.toLowerCase();
+          preferences.disliked_ingredients.forEach(ing => {
+            if (ing.trim() && itemText.includes(ing.toLowerCase())) {
+              score -= 80;
             }
           });
         }
 
-        if (item.protein && item.protein > 25) score += 5;
+        // Nutrition bonus
+        if (item.protein && item.protein > 20) score += 5;
 
         return {
           ...item,
@@ -254,8 +301,7 @@ export class TFRecommender {
       .sort((a, b) => b.score - a.score);
   }
 
-  // Clean up resources
-  dispose() {
+  dispose(): void {
     if (this.model) {
       this.model.dispose();
       this.model = null;
