@@ -1,0 +1,46 @@
+version: '3.8'
+services:
+  postgres:
+    image: postgres:15
+    environment:
+      POSTGRES_DB: umass_dining
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: your_password
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+
+  redis:
+    image: redis:7
+    ports:
+      - "6379:6379"
+    volumes:
+      - redisdata:/data
+
+  backend:
+    build: ./docs/backend-java
+    environment:
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/umass_dining
+      SPRING_DATASOURCE_USERNAME: postgres
+      SPRING_DATASOURCE_PASSWORD: your_password
+      SPRING_REDIS_HOST: redis
+      SPRING_REDIS_PORT: 6379
+      JWT_SECRET: your-jwt-secret-key
+    ports:
+      - "8080:8080"
+    depends_on:
+      - postgres
+      - redis
+
+  scraper:
+    build: ./docs/scraper-python
+    environment:
+      DATABASE_URL: postgresql://postgres:your_password@postgres:5432/umass_dining
+    depends_on:
+      - postgres
+    restart: unless-stopped
+
+volumes:
+  pgdata:
+  redisdata:
